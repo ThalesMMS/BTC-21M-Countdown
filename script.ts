@@ -4,6 +4,7 @@ type Block = {
 };
 
 type EstimateMode = 'average' | 'fixed';
+type TargetMode = 'exact' | 'estimate';
 
 // Constants
 const TARGET_BTC = 20000000;
@@ -18,11 +19,12 @@ const BLOCKS_API_URL = 'https://mempool.space/api/blocks';
 const HEIGHT_API_URL = 'https://mempool.space/api/blocks/tip/height';
 
 const TARGET_SATS = TARGET_BTC * SATS_PER_BTC;
-const TARGET_BLOCK = blockHeightForSupply(TARGET_SATS);
-if (TARGET_BLOCK === null) {
+const _exactBlock = blockHeightForSupply(TARGET_SATS);
+if (_exactBlock === null) {
     throw new Error('Unable to compute target block height.');
 }
-const TARGET_BLOCK_HEIGHT = TARGET_BLOCK;
+const EXACT_TARGET_BLOCK: number = _exactBlock;
+const ESTIMATED_TARGET_BLOCK = 940217;
 
 // State
 let currentBlock: number | null = null;
@@ -30,7 +32,8 @@ let avgBlockTimeMs = FALLBACK_BLOCK_TIME_MS;
 let lastBlockTimeMs: number | null = null;
 let estimatedTargetTimeMs: number | null = null;
 let countdownInterval: number | null = null;
-let estimateMode: EstimateMode = 'average';
+let estimateMode: EstimateMode = 'fixed';
+let targetMode: TargetMode = 'exact';
 
 function getRequiredElement<T extends HTMLElement>(id: string): T {
     const element = document.getElementById(id);
@@ -63,7 +66,11 @@ const elements = {
     modeFixedLabel: getRequiredElement<HTMLSpanElement>('mode-fixed-label'),
     modeAvgLabel: getRequiredElement<HTMLSpanElement>('mode-avg-label'),
     avgBlockTime: getRequiredElement<HTMLSpanElement>('avg-block-time'),
-    lastUpdate: getRequiredElement<HTMLSpanElement>('last-update')
+    lastUpdate: getRequiredElement<HTMLSpanElement>('last-update'),
+    targetMode: getRequiredElement<HTMLInputElement>('target-mode'),
+    targetModeLabel: getRequiredElement<HTMLSpanElement>('target-mode-label'),
+    modeExactLabel: getRequiredElement<HTMLSpanElement>('mode-exact-label'),
+    modeEstimateLabel: getRequiredElement<HTMLSpanElement>('mode-estimate-label')
 };
 
 // Calculate total subsidy mined (in satoshis) at a given block height
@@ -123,6 +130,10 @@ function calculateAverageBlockTimeMs(blocks: Block[]): number | null {
     return (totalSeconds / samples) * 1000;
 }
 
+function getTargetBlock(): number {
+    return targetMode === 'exact' ? EXACT_TARGET_BLOCK : ESTIMATED_TARGET_BLOCK;
+}
+
 function getActiveBlockTimeMs(): number {
     return estimateMode === 'fixed' ? FIXED_BLOCK_TIME_MS : avgBlockTimeMs;
 }
@@ -157,7 +168,7 @@ async function fetchBlockData(): Promise<boolean> {
         const blockTimeMs = tipBlock.timestamp * 1000;
         if (isNewBlock || estimatedTargetTimeMs === null || lastBlockTimeMs !== blockTimeMs) {
             lastBlockTimeMs = blockTimeMs;
-            updateEstimatedTargetTime(Math.max(0, TARGET_BLOCK_HEIGHT - currentBlock), blockTimeMs);
+            updateEstimatedTargetTime(Math.max(0, getTargetBlock() - currentBlock), blockTimeMs);
         }
         updateLastUpdateTime();
         return true;
@@ -181,7 +192,7 @@ async function fetchBlockHeightFallback(): Promise<boolean> {
         currentBlock = height;
         if (isNewBlock || estimatedTargetTimeMs === null) {
             lastBlockTimeMs = Date.now();
-            updateEstimatedTargetTime(Math.max(0, TARGET_BLOCK_HEIGHT - currentBlock), lastBlockTimeMs);
+            updateEstimatedTargetTime(Math.max(0, getTargetBlock() - currentBlock), lastBlockTimeMs);
         }
         updateLastUpdateTime();
         return true;
@@ -197,7 +208,7 @@ async function fetchBlockHeightFallback(): Promise<boolean> {
 function calculateRemaining(): { blocksLeft: number; totalMinedSats: number; btcLeftSats: number } | null {
     if (currentBlock === null) return null;
 
-    const blocksLeft = Math.max(0, TARGET_BLOCK_HEIGHT - currentBlock);
+    const blocksLeft = Math.max(0, getTargetBlock() - currentBlock);
     const totalMinedSats = totalSubsidyAtHeight(currentBlock);
     const btcLeftSats = Math.max(0, TARGET_SATS - totalMinedSats);
 
@@ -292,7 +303,7 @@ function formatEstimatedDate(msLeft: number): string {
 function updateStatsDisplay(data: { blocksLeft: number; totalMinedSats: number; btcLeftSats: number }, msLeft: number | null): void {
     elements.currentBlock.classList.remove('error');
     elements.currentBlock.textContent = formatNumber(currentBlock ?? 0);
-    elements.targetBlock.textContent = formatNumber(TARGET_BLOCK_HEIGHT);
+    elements.targetBlock.textContent = formatNumber(getTargetBlock());
     elements.blocksLeft.textContent = formatNumber(data.blocksLeft);
     elements.btcLeft.textContent = `${formatBtc(data.btcLeftSats / SATS_PER_BTC)} BTC`;
 
@@ -319,6 +330,12 @@ function updateStatsDisplay(data: { blocksLeft: number; totalMinedSats: number; 
         : 'the last 10 blocks average time';
     elements.modeFixedLabel.classList.toggle('active', estimateMode === 'fixed');
     elements.modeAvgLabel.classList.toggle('active', estimateMode === 'average');
+
+    elements.targetModeLabel.textContent = targetMode === 'exact'
+        ? `exact protocol block (${formatNumber(EXACT_TARGET_BLOCK)})`
+        : `market estimate block (${formatNumber(ESTIMATED_TARGET_BLOCK)})`;
+    elements.modeExactLabel.classList.toggle('active', targetMode === 'exact');
+    elements.modeEstimateLabel.classList.toggle('active', targetMode === 'estimate');
 }
 
 // Update last update time display
@@ -332,6 +349,20 @@ function updateLastUpdateTime(): void {
     elements.lastUpdate.textContent = `Last update: ${timeStr}`;
 }
 
+function setupTargetModeToggle(): void {
+    elements.targetMode.checked = targetMode === 'estimate';
+    elements.modeExactLabel.classList.toggle('active', targetMode === 'exact');
+    elements.modeEstimateLabel.classList.toggle('active', targetMode === 'estimate');
+
+    elements.targetMode.addEventListener('change', () => {
+        targetMode = elements.targetMode.checked ? 'estimate' : 'exact';
+        if (currentBlock !== null && lastBlockTimeMs !== null) {
+            updateEstimatedTargetTime(Math.max(0, getTargetBlock() - currentBlock), lastBlockTimeMs);
+        }
+        updateDisplay();
+    });
+}
+
 function setupEstimateModeToggle(): void {
     elements.estimateMode.checked = estimateMode === 'average';
     elements.modeFixedLabel.classList.toggle('active', estimateMode === 'fixed');
@@ -340,7 +371,7 @@ function setupEstimateModeToggle(): void {
     elements.estimateMode.addEventListener('change', () => {
         estimateMode = elements.estimateMode.checked ? 'average' : 'fixed';
         if (currentBlock !== null && lastBlockTimeMs !== null) {
-            updateEstimatedTargetTime(Math.max(0, TARGET_BLOCK_HEIGHT - currentBlock), lastBlockTimeMs);
+            updateEstimatedTargetTime(Math.max(0, getTargetBlock() - currentBlock), lastBlockTimeMs);
         }
         updateDisplay();
     });
@@ -387,5 +418,6 @@ document.addEventListener('visibilitychange', async () => {
 });
 
 // Initialize
+setupTargetModeToggle();
 setupEstimateModeToggle();
 startCountdown();

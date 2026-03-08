@@ -196,13 +196,21 @@ h2 {
     font-size: 1.1rem;
 }
 
+/* Toggles Row */
+.toggles-row {
+    display: flex;
+    justify-content: center;
+    gap: 20px;
+    margin-bottom: 30px;
+    flex-wrap: wrap;
+}
+
 /* Estimate Toggle */
 .estimate-toggle {
     display: flex;
     flex-direction: column;
     align-items: center;
     gap: 10px;
-    margin-bottom: 30px;
 }
 
 .toggle-label {

@@ -77,15 +77,28 @@
                 </div>
             </div>
 
-            <div class="estimate-toggle">
-                <span class="toggle-label">Estimate Mode</span>
-                <div class="toggle-control">
-                    <span class="toggle-option" id="mode-fixed-label">Fixed 10m</span>
-                    <label class="switch">
-                        <input type="checkbox" id="estimate-mode" aria-label="Toggle estimate mode">
-                        <span class="slider"></span>
-                    </label>
-                    <span class="toggle-option" id="mode-avg-label">Avg last 10</span>
+            <div class="toggles-row">
+                <div class="estimate-toggle">
+                    <span class="toggle-label">Target Definition</span>
+                    <div class="toggle-control">
+                        <span class="toggle-option" id="mode-exact-label">Exact protocol</span>
+                        <label class="switch">
+                            <input type="checkbox" id="target-mode" aria-label="Toggle target definition">
+                            <span class="slider"></span>
+                        </label>
+                        <span class="toggle-option" id="mode-estimate-label">Market estimate</span>
+                    </div>
+                </div>
+                <div class="estimate-toggle">
+                    <span class="toggle-label">Estimate Mode</span>
+                    <div class="toggle-control">
+                        <span class="toggle-option" id="mode-fixed-label">Fixed 10m</span>
+                        <label class="switch">
+                            <input type="checkbox" id="estimate-mode" aria-label="Toggle estimate mode">
+                            <span class="slider"></span>
+                        </label>
+                        <span class="toggle-option" id="mode-avg-label">Avg last 10</span>
+                    </div>
                 </div>
             </div>
 
@@ -103,7 +116,7 @@
         <footer>
             <p>Data from <a href="https://mempool.space" target="_blank" rel="noopener">mempool.space</a></p>
             <p class="update-info">Updates every 30 seconds • <span id="last-update">--</span></p>
-            <p class="estimate-note" id="estimate-note">Estimates use <span id="estimate-mode-label">the last 10 blocks average time</span> (<span id="avg-block-time">--</span>).</p>
+            <p class="estimate-note" id="estimate-note">Target: <span id="target-mode-label">exact protocol block</span> • Estimates use <span id="estimate-mode-label">the last 10 blocks average time</span> (<span id="avg-block-time">--</span>).</p>
         </footer>
     </div>
 
