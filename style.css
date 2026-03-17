@@ -232,6 +232,17 @@ footer,
     line-height: 1.2;
 }
 
+.hero-chip-centered .hero-chip-value {
+    display: block;
+    width: 100%;
+    text-align: center;
+}
+
+.hero-chip-supply .hero-chip-value {
+    white-space: nowrap;
+    letter-spacing: -0.04em;
+}
+
 .countdown-panel {
     padding: 28px 32px 32px;
 }
@@ -656,6 +667,10 @@ footer a {
     .hero-chip-value,
     .stat-value {
         font-size: 0.94rem;
+    }
+
+    .hero-chip-supply .hero-chip-value {
+        font-size: 0.8rem;
     }
 
     .hero-chip,
