@@ -1,29 +1,29 @@
-# 20M Bitcoin Countdown
+# 21M Countdown
 
-A single-page countdown that estimates when Bitcoin’s mined supply reaches 20,000,000 BTC. It pulls the latest block data from mempool.space, computes the subsidy-based supply from the protocol schedule, and projects time using the average block interval.
+A single-page countdown that projects when Bitcoin reaches its final subsidy-bearing block. It pulls recent chain data from mempool.space, computes issuance directly from the protocol schedule, and estimates when the last 1 sat block reward will be mined using a fixed 10-minute block interval.
 
-## Features
-- Live block height and blocks remaining to the 20M milestone.
-- Subsidy-based BTC mined and remaining calculations (no arbitrary constants).
-- Estimated date based on the average time of the last 10 blocks.
-- Smooth flip-style countdown UI with periodic API refresh.
+## What It Tracks
+- The final subsidy block at height `6,929,999`.
+- Remaining blocks and subsidy until issuance effectively ends.
+- Current block reward and total subsidy issued so far.
+- A live countdown using a fixed 10-minute block cadence.
 
-## How It Works
-- **Target block** is computed from the Bitcoin issuance schedule (halving every 210,000 blocks).
-- **BTC mined** is calculated from block subsidy only (fees are excluded, as they do not create BTC).
-- **Time estimate** is anchored to the timestamp of the latest block and uses the last 10 blocks average interval.
+## Protocol Notes
+- Bitcoin does not mint a literal final whole bitcoin.
+- Due to reward truncation, total subsidy tops out at `20,999,999.9769 BTC`, not exactly `21,000,000 BTC`.
+- The final subsidy is `1 sat`, and the common high-level estimate for that block is around the year `2140`.
 
 ## Development
 1. Install dependencies: `npm install`
 2. Compile TypeScript: `npm run build`
 
-If you open `index.html` locally, make sure you run the build first so `script.js` exists.
+If you open `index.html` directly, run the build first so `script.js` exists.
 
 ## Data Source
 - mempool.space API (`/api/blocks` and `/api/blocks/tip/height` as a fallback)
 
 ## Disclaimer
-This is an estimate. Block times are probabilistic and can vary; the displayed date is a projection based on recent network conditions.
+This is still a projection. Block intervals are probabilistic, difficulty adjusts over time, and any date shown is an estimate rather than a protocol guarantee.
 
 ## License
 MIT License. See `LICENSE`.

@@ -3,37 +3,25 @@ type Block = {
     timestamp: number;
 };
 
-type EstimateMode = 'average' | 'fixed';
-type TargetMode = 'exact' | 'estimate';
-
 // Constants
-const TARGET_BTC = 20000000;
 const TOTAL_BTC_SUPPLY = 21000000;
 const SATS_PER_BTC = 100000000;
 const HALVING_INTERVAL = 210000;
 const INITIAL_SUBSIDY_SATS = 50 * SATS_PER_BTC;
 const FIXED_BLOCK_TIME_MS = 10 * 60 * 1000; // 10 minutes in milliseconds
-const FALLBACK_BLOCK_TIME_MS = FIXED_BLOCK_TIME_MS;
 const API_POLL_INTERVAL = 30000; // 30 seconds
 const BLOCKS_API_URL = 'https://mempool.space/api/blocks';
 const HEIGHT_API_URL = 'https://mempool.space/api/blocks/tip/height';
+const DAY_MS = 24 * 60 * 60 * 1000;
 
-const TARGET_SATS = TARGET_BTC * SATS_PER_BTC;
-const _exactBlock = blockHeightForSupply(TARGET_SATS);
-if (_exactBlock === null) {
-    throw new Error('Unable to compute target block height.');
-}
-const EXACT_TARGET_BLOCK: number = _exactBlock;
-const ESTIMATED_TARGET_BLOCK = 940217;
+const FINAL_SUBSIDY_BLOCK = calculateFinalSubsidyBlock();
+const MAX_ISSUABLE_SATS = totalSubsidyAtHeight(FINAL_SUBSIDY_BLOCK);
+const UNISSUED_SATS = (TOTAL_BTC_SUPPLY * SATS_PER_BTC) - MAX_ISSUABLE_SATS;
 
 // State
 let currentBlock: number | null = null;
-let avgBlockTimeMs = FALLBACK_BLOCK_TIME_MS;
 let lastBlockTimeMs: number | null = null;
 let estimatedTargetTimeMs: number | null = null;
-let countdownInterval: number | null = null;
-let estimateMode: EstimateMode = 'fixed';
-let targetMode: TargetMode = 'exact';
 
 function getRequiredElement<T extends HTMLElement>(id: string): T {
     const element = document.getElementById(id);
@@ -45,32 +33,30 @@ function getRequiredElement<T extends HTMLElement>(id: string): T {
 
 // DOM Elements
 const elements = {
+    years: getRequiredElement<HTMLSpanElement>('years'),
     days: getRequiredElement<HTMLSpanElement>('days'),
     hours: getRequiredElement<HTMLSpanElement>('hours'),
     mins: getRequiredElement<HTMLSpanElement>('mins'),
     secs: getRequiredElement<HTMLSpanElement>('secs'),
+    yearsFlip: getRequiredElement<HTMLDivElement>('years-flip'),
     daysFlip: getRequiredElement<HTMLDivElement>('days-flip'),
     hoursFlip: getRequiredElement<HTMLDivElement>('hours-flip'),
     minsFlip: getRequiredElement<HTMLDivElement>('mins-flip'),
     secsFlip: getRequiredElement<HTMLDivElement>('secs-flip'),
     currentBlock: getRequiredElement<HTMLSpanElement>('current-block'),
     targetBlock: getRequiredElement<HTMLSpanElement>('target-block'),
+    targetBlockHero: getRequiredElement<HTMLSpanElement>('target-block-hero'),
     blocksLeft: getRequiredElement<HTMLSpanElement>('blocks-left'),
     btcLeft: getRequiredElement<HTMLSpanElement>('btc-left'),
+    currentSubsidy: getRequiredElement<HTMLSpanElement>('current-subsidy'),
     estimatedDate: getRequiredElement<HTMLSpanElement>('estimated-date'),
     btcMined: getRequiredElement<HTMLSpanElement>('btc-mined'),
+    finalSupply: getRequiredElement<HTMLSpanElement>('final-supply'),
+    progressTargetSupply: getRequiredElement<HTMLSpanElement>('progress-target-supply'),
+    unissuedAmount: getRequiredElement<HTMLSpanElement>('unissued-amount'),
     progressPercent: getRequiredElement<HTMLSpanElement>('progress-percent'),
     progressFill: getRequiredElement<HTMLDivElement>('progress-fill'),
-    estimateMode: getRequiredElement<HTMLInputElement>('estimate-mode'),
-    estimateModeLabel: getRequiredElement<HTMLSpanElement>('estimate-mode-label'),
-    modeFixedLabel: getRequiredElement<HTMLSpanElement>('mode-fixed-label'),
-    modeAvgLabel: getRequiredElement<HTMLSpanElement>('mode-avg-label'),
-    avgBlockTime: getRequiredElement<HTMLSpanElement>('avg-block-time'),
-    lastUpdate: getRequiredElement<HTMLSpanElement>('last-update'),
-    targetMode: getRequiredElement<HTMLInputElement>('target-mode'),
-    targetModeLabel: getRequiredElement<HTMLSpanElement>('target-mode-label'),
-    modeExactLabel: getRequiredElement<HTMLSpanElement>('mode-exact-label'),
-    modeEstimateLabel: getRequiredElement<HTMLSpanElement>('mode-estimate-label')
+    lastUpdate: getRequiredElement<HTMLSpanElement>('last-update')
 };
 
 // Calculate total subsidy mined (in satoshis) at a given block height
@@ -91,56 +77,27 @@ function totalSubsidyAtHeight(height: number | null): number {
     return total;
 }
 
-// Find the first block height where total subsidy >= target (in satoshis)
-function blockHeightForSupply(targetSats: number): number | null {
+function subsidyAtHeight(height: number | null): number {
+    if (height === null || height < 0) return 0;
+    const era = Math.floor(height / HALVING_INTERVAL);
+    return Math.floor(INITIAL_SUBSIDY_SATS / (2 ** era));
+}
+
+function calculateFinalSubsidyBlock(): number {
+    let erasWithSubsidy = 0;
     let subsidy = INITIAL_SUBSIDY_SATS;
-    let remaining = targetSats;
-    let blocks = 0;
 
     while (subsidy > 0) {
-        const eraSupply = subsidy * HALVING_INTERVAL;
-        if (remaining > eraSupply) {
-            remaining -= eraSupply;
-            blocks += HALVING_INTERVAL;
-            subsidy = Math.floor(subsidy / 2);
-            continue;
-        }
-
-        const blocksNeeded = Math.ceil(remaining / subsidy);
-        return blocks + blocksNeeded - 1;
+        erasWithSubsidy += 1;
+        subsidy = Math.floor(subsidy / 2);
     }
 
-    return null;
-}
-
-function calculateAverageBlockTimeMs(blocks: Block[]): number | null {
-    if (!Array.isArray(blocks) || blocks.length < 2) return null;
-
-    let totalSeconds = 0;
-    let samples = 0;
-    for (let i = 0; i < blocks.length - 1; i += 1) {
-        const delta = blocks[i].timestamp - blocks[i + 1].timestamp;
-        if (delta > 0) {
-            totalSeconds += delta;
-            samples += 1;
-        }
-    }
-
-    if (samples === 0) return null;
-    return (totalSeconds / samples) * 1000;
-}
-
-function getTargetBlock(): number {
-    return targetMode === 'exact' ? EXACT_TARGET_BLOCK : ESTIMATED_TARGET_BLOCK;
-}
-
-function getActiveBlockTimeMs(): number {
-    return estimateMode === 'fixed' ? FIXED_BLOCK_TIME_MS : avgBlockTimeMs;
+    return (erasWithSubsidy * HALVING_INTERVAL) - 1;
 }
 
 function updateEstimatedTargetTime(blocksLeft: number | null, anchorTimeMs: number | null = lastBlockTimeMs): void {
     if (anchorTimeMs === null || blocksLeft === null) return;
-    estimatedTargetTimeMs = anchorTimeMs + (blocksLeft * getActiveBlockTimeMs());
+    estimatedTargetTimeMs = anchorTimeMs + (blocksLeft * FIXED_BLOCK_TIME_MS);
 }
 
 // Fetch current block data from mempool.space
@@ -160,15 +117,11 @@ async function fetchBlockData(): Promise<boolean> {
         const nextHeight = tipBlock.height;
         const isNewBlock = currentBlock === null || nextHeight !== currentBlock;
         currentBlock = nextHeight;
-        const averageMs = calculateAverageBlockTimeMs(sortedBlocks);
-        if (averageMs) {
-            avgBlockTimeMs = averageMs;
-        }
 
         const blockTimeMs = tipBlock.timestamp * 1000;
         if (isNewBlock || estimatedTargetTimeMs === null || lastBlockTimeMs !== blockTimeMs) {
             lastBlockTimeMs = blockTimeMs;
-            updateEstimatedTargetTime(Math.max(0, getTargetBlock() - currentBlock), blockTimeMs);
+            updateEstimatedTargetTime(Math.max(0, FINAL_SUBSIDY_BLOCK - currentBlock), blockTimeMs);
         }
         updateLastUpdateTime();
         return true;
@@ -192,7 +145,7 @@ async function fetchBlockHeightFallback(): Promise<boolean> {
         currentBlock = height;
         if (isNewBlock || estimatedTargetTimeMs === null) {
             lastBlockTimeMs = Date.now();
-            updateEstimatedTargetTime(Math.max(0, getTargetBlock() - currentBlock), lastBlockTimeMs);
+            updateEstimatedTargetTime(Math.max(0, FINAL_SUBSIDY_BLOCK - currentBlock), lastBlockTimeMs);
         }
         updateLastUpdateTime();
         return true;
@@ -205,14 +158,15 @@ async function fetchBlockHeightFallback(): Promise<boolean> {
 }
 
 // Calculate remaining blocks, BTC, and total mined
-function calculateRemaining(): { blocksLeft: number; totalMinedSats: number; btcLeftSats: number } | null {
+function calculateRemaining(): { blocksLeft: number; totalMinedSats: number; btcLeftSats: number; currentSubsidySats: number } | null {
     if (currentBlock === null) return null;
 
-    const blocksLeft = Math.max(0, getTargetBlock() - currentBlock);
+    const blocksLeft = Math.max(0, FINAL_SUBSIDY_BLOCK - currentBlock);
     const totalMinedSats = totalSubsidyAtHeight(currentBlock);
-    const btcLeftSats = Math.max(0, TARGET_SATS - totalMinedSats);
+    const btcLeftSats = Math.max(0, MAX_ISSUABLE_SATS - totalMinedSats);
+    const currentSubsidySats = subsidyAtHeight(currentBlock);
 
-    return { blocksLeft, totalMinedSats, btcLeftSats };
+    return { blocksLeft, totalMinedSats, btcLeftSats, currentSubsidySats };
 }
 
 // Format number with commas
@@ -227,17 +181,60 @@ function formatBtc(amount: number, maximumFractionDigits = 8): string {
     });
 }
 
-function formatDurationShort(ms: number): string {
-    if (!Number.isFinite(ms) || ms <= 0) return '--';
-    const totalSeconds = Math.round(ms / 1000);
-    const minutes = Math.floor(totalSeconds / 60);
-    const seconds = totalSeconds % 60;
-    return `${minutes}m ${String(seconds).padStart(2, '0')}s`;
+function formatSubsidy(subsidySats: number): string {
+    if (subsidySats <= 0) return '0 BTC';
+    if (subsidySats < SATS_PER_BTC) {
+        const satsLabel = subsidySats === 1 ? 'sat' : 'sats';
+        return `${formatBtc(subsidySats / SATS_PER_BTC, 8)} BTC (${formatNumber(subsidySats)} ${satsLabel})`;
+    }
+    return `${formatBtc(subsidySats / SATS_PER_BTC, 8)} BTC`;
 }
 
-// Pad number with leading zero
-function padZero(num: number): string {
-    return String(Math.floor(num)).padStart(2, '0');
+function padDigits(num: number, digits = 2): string {
+    return String(Math.floor(num)).padStart(digits, '0');
+}
+
+function addUtcYears(date: Date, years: number): Date {
+    return new Date(Date.UTC(
+        date.getUTCFullYear() + years,
+        date.getUTCMonth(),
+        date.getUTCDate(),
+        date.getUTCHours(),
+        date.getUTCMinutes(),
+        date.getUTCSeconds(),
+        date.getUTCMilliseconds()
+    ));
+}
+
+function getCountdownParts(targetTimeMs: number): { years: number; days: number; hours: number; mins: number; secs: number } {
+    const now = new Date();
+    const target = new Date(targetTimeMs);
+
+    if (target <= now) {
+        return { years: 0, days: 0, hours: 0, mins: 0, secs: 0 };
+    }
+
+    let years = target.getUTCFullYear() - now.getUTCFullYear();
+    let yearAnchor = addUtcYears(now, years);
+
+    if (yearAnchor > target) {
+        years -= 1;
+        yearAnchor = addUtcYears(now, years);
+    }
+
+    let remainingMs = target.getTime() - yearAnchor.getTime();
+    const days = Math.floor(remainingMs / DAY_MS);
+    remainingMs -= days * DAY_MS;
+
+    const hours = Math.floor(remainingMs / (60 * 60 * 1000));
+    remainingMs -= hours * 60 * 60 * 1000;
+
+    const mins = Math.floor(remainingMs / (60 * 1000));
+    remainingMs -= mins * 60 * 1000;
+
+    const secs = Math.floor(remainingMs / 1000);
+
+    return { years, days, hours, mins, secs };
 }
 
 // Trigger flip animation
@@ -257,8 +254,9 @@ function triggerFlip(element: HTMLElement, newValue: string): void {
 }
 
 // Update countdown display
-function updateCountdownDisplay(msLeft: number | null): void {
-    if (msLeft === null) {
+function updateCountdownDisplay(targetTimeMs: number | null): void {
+    if (targetTimeMs === null) {
+        triggerFlip(elements.yearsFlip, '---');
         triggerFlip(elements.daysFlip, '--');
         triggerFlip(elements.hoursFlip, '--');
         triggerFlip(elements.minsFlip, '--');
@@ -266,18 +264,16 @@ function updateCountdownDisplay(msLeft: number | null): void {
         return;
     }
 
-    const totalSeconds = Math.floor(msLeft / 1000);
-    const days = Math.floor(totalSeconds / 86400);
-    const hours = Math.floor((totalSeconds % 86400) / 3600);
-    const mins = Math.floor((totalSeconds % 3600) / 60);
-    const secs = totalSeconds % 60;
+    const parts = getCountdownParts(targetTimeMs);
 
-    const daysStr = padZero(days);
-    const hoursStr = padZero(hours);
-    const minsStr = padZero(mins);
-    const secsStr = padZero(secs);
+    const yearsStr = padDigits(parts.years, 3);
+    const daysStr = padDigits(parts.days, 3);
+    const hoursStr = padDigits(parts.hours);
+    const minsStr = padDigits(parts.mins);
+    const secsStr = padDigits(parts.secs);
 
     // Update with flip animation
+    triggerFlip(elements.yearsFlip, yearsStr);
     triggerFlip(elements.daysFlip, daysStr);
     triggerFlip(elements.hoursFlip, hoursStr);
     triggerFlip(elements.minsFlip, minsStr);
@@ -285,8 +281,8 @@ function updateCountdownDisplay(msLeft: number | null): void {
 }
 
 // Format estimated date
-function formatEstimatedDate(msLeft: number): string {
-    const estimatedDate = new Date(Date.now() + msLeft);
+function formatEstimatedDate(targetTimeMs: number): string {
+    const estimatedDate = new Date(targetTimeMs);
     const options: Intl.DateTimeFormatOptions = {
         weekday: 'short',
         year: 'numeric',
@@ -300,42 +296,33 @@ function formatEstimatedDate(msLeft: number): string {
 }
 
 // Update stats display
-function updateStatsDisplay(data: { blocksLeft: number; totalMinedSats: number; btcLeftSats: number }, msLeft: number | null): void {
+function updateStatsDisplay(
+    data: { blocksLeft: number; totalMinedSats: number; btcLeftSats: number; currentSubsidySats: number },
+    targetTimeMs: number | null
+): void {
     elements.currentBlock.classList.remove('error');
     elements.currentBlock.textContent = formatNumber(currentBlock ?? 0);
-    elements.targetBlock.textContent = formatNumber(getTargetBlock());
+    elements.targetBlock.textContent = formatNumber(FINAL_SUBSIDY_BLOCK);
+    elements.targetBlockHero.textContent = formatNumber(FINAL_SUBSIDY_BLOCK);
     elements.blocksLeft.textContent = formatNumber(data.blocksLeft);
     elements.btcLeft.textContent = `${formatBtc(data.btcLeftSats / SATS_PER_BTC)} BTC`;
+    elements.currentSubsidy.textContent = formatSubsidy(data.currentSubsidySats);
 
     if (data.blocksLeft === 0) {
-        elements.estimatedDate.textContent = 'Reached';
-    } else if (msLeft !== null) {
-        elements.estimatedDate.textContent = formatEstimatedDate(msLeft);
+        elements.estimatedDate.textContent = 'Final subsidy mined';
+    } else if (targetTimeMs !== null) {
+        elements.estimatedDate.textContent = formatEstimatedDate(targetTimeMs);
     } else {
         elements.estimatedDate.textContent = '--';
     }
 
     // Update progress
     const totalMinedBtc = data.totalMinedSats / SATS_PER_BTC;
-    const progressPercent = Math.min((data.totalMinedSats / (TOTAL_BTC_SUPPLY * SATS_PER_BTC)) * 100, 100);
+    const progressPercent = Math.min((data.totalMinedSats / MAX_ISSUABLE_SATS) * 100, 100);
 
     elements.btcMined.textContent = formatBtc(totalMinedBtc);
     elements.progressPercent.textContent = progressPercent.toFixed(2);
     elements.progressFill.style.width = `${progressPercent}%`;
-
-    const activeBlockTimeMs = getActiveBlockTimeMs();
-    elements.avgBlockTime.textContent = formatDurationShort(activeBlockTimeMs);
-    elements.estimateModeLabel.textContent = estimateMode === 'fixed'
-        ? 'fixed 10-minute blocks'
-        : 'the last 10 blocks average time';
-    elements.modeFixedLabel.classList.toggle('active', estimateMode === 'fixed');
-    elements.modeAvgLabel.classList.toggle('active', estimateMode === 'average');
-
-    elements.targetModeLabel.textContent = targetMode === 'exact'
-        ? `exact protocol block (${formatNumber(EXACT_TARGET_BLOCK)})`
-        : `market estimate block (${formatNumber(ESTIMATED_TARGET_BLOCK)})`;
-    elements.modeExactLabel.classList.toggle('active', targetMode === 'exact');
-    elements.modeEstimateLabel.classList.toggle('active', targetMode === 'estimate');
 }
 
 // Update last update time display
@@ -349,32 +336,13 @@ function updateLastUpdateTime(): void {
     elements.lastUpdate.textContent = `Last update: ${timeStr}`;
 }
 
-function setupTargetModeToggle(): void {
-    elements.targetMode.checked = targetMode === 'estimate';
-    elements.modeExactLabel.classList.toggle('active', targetMode === 'exact');
-    elements.modeEstimateLabel.classList.toggle('active', targetMode === 'estimate');
-
-    elements.targetMode.addEventListener('change', () => {
-        targetMode = elements.targetMode.checked ? 'estimate' : 'exact';
-        if (currentBlock !== null && lastBlockTimeMs !== null) {
-            updateEstimatedTargetTime(Math.max(0, getTargetBlock() - currentBlock), lastBlockTimeMs);
-        }
-        updateDisplay();
-    });
-}
-
-function setupEstimateModeToggle(): void {
-    elements.estimateMode.checked = estimateMode === 'average';
-    elements.modeFixedLabel.classList.toggle('active', estimateMode === 'fixed');
-    elements.modeAvgLabel.classList.toggle('active', estimateMode === 'average');
-
-    elements.estimateMode.addEventListener('change', () => {
-        estimateMode = elements.estimateMode.checked ? 'average' : 'fixed';
-        if (currentBlock !== null && lastBlockTimeMs !== null) {
-            updateEstimatedTargetTime(Math.max(0, getTargetBlock() - currentBlock), lastBlockTimeMs);
-        }
-        updateDisplay();
-    });
+function populateStaticCopy(): void {
+    const finalSupplyText = `${formatBtc(MAX_ISSUABLE_SATS / SATS_PER_BTC)} BTC`;
+    elements.finalSupply.textContent = finalSupplyText;
+    elements.progressTargetSupply.textContent = finalSupplyText;
+    elements.unissuedAmount.textContent = `${formatBtc(UNISSUED_SATS / SATS_PER_BTC)} BTC`;
+    elements.targetBlock.textContent = formatNumber(FINAL_SUBSIDY_BLOCK);
+    elements.targetBlockHero.textContent = formatNumber(FINAL_SUBSIDY_BLOCK);
 }
 
 // Main update function
@@ -385,12 +353,12 @@ function updateDisplay(): void {
         return;
     }
 
-    const msLeft = estimatedTargetTimeMs === null
+    const targetTimeMs = estimatedTargetTimeMs === null
         ? null
-        : Math.max(0, estimatedTargetTimeMs - Date.now());
+        : Math.max(Date.now(), estimatedTargetTimeMs);
 
-    updateCountdownDisplay(msLeft);
-    updateStatsDisplay(data, msLeft);
+    updateCountdownDisplay(targetTimeMs);
+    updateStatsDisplay(data, targetTimeMs);
 }
 
 // Start the countdown
@@ -400,7 +368,7 @@ async function startCountdown(): Promise<void> {
     updateDisplay();
 
     // Update countdown every second
-    countdownInterval = window.setInterval(updateDisplay, 1000);
+    window.setInterval(updateDisplay, 1000);
 
     // Fetch new block height every 30 seconds
     window.setInterval(async () => {
@@ -418,6 +386,5 @@ document.addEventListener('visibilitychange', async () => {
 });
 
 // Initialize
-setupTargetModeToggle();
-setupEstimateModeToggle();
+populateStaticCopy();
 startCountdown();
