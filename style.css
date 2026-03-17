@@ -148,6 +148,7 @@ h1,
 h2 {
     font-weight: 700;
     line-height: 0.95;
+    text-wrap: balance;
 }
 
 h1 {
@@ -252,6 +253,7 @@ footer,
     display: flex;
     flex-direction: column;
     gap: 12px;
+    min-width: 0;
 }
 
 .flip-card {
@@ -486,7 +488,18 @@ footer a {
         padding: 18px;
     }
 
-    .countdown-container,
+    .countdown-container {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 12px;
+    }
+
+    .countdown-item:last-child {
+        grid-column: 1 / -1;
+        max-width: 210px;
+        width: 100%;
+        justify-self: center;
+    }
+
     .stats-grid {
         grid-template-columns: 1fr;
     }
@@ -496,18 +509,70 @@ footer a {
         min-height: 120px;
     }
 
+    .section-copy {
+        margin-bottom: 22px;
+    }
+
     .controls-row {
         justify-content: flex-start;
+    }
+
+    .model-pill {
+        width: 100%;
+        justify-content: space-between;
     }
 }
 
 @media (max-width: 480px) {
+    .page-shell {
+        padding: 12px 10px 28px;
+    }
+
+    .container {
+        gap: 14px;
+    }
+
+    .hero-panel,
+    .countdown-panel,
+    .controls-row,
+    .progress-section,
+    footer {
+        border-radius: 22px;
+    }
+
+    .hero-panel,
+    .countdown-panel,
+    .progress-section {
+        padding: 18px;
+    }
+
+    .controls-row,
+    footer {
+        padding: 16px 18px;
+    }
+
     h1 {
-        font-size: 2.8rem;
+        font-size: 2.45rem;
     }
 
     h2 {
-        font-size: 1.5rem;
+        font-size: 1.34rem;
+        max-width: 11ch;
+        line-height: 0.98;
+    }
+
+    .hero-text,
+    .section-text,
+    .countdown-note,
+    .progress-text,
+    .progress-footnote,
+    footer p {
+        font-size: 0.88rem;
+        line-height: 1.55;
+    }
+
+    .hero-metrics {
+        gap: 10px;
     }
 
     .hero-chip-value,
@@ -515,7 +580,51 @@ footer a {
         font-size: 1.08rem;
     }
 
+    .hero-chip,
+    .stat-card {
+        border-radius: 20px;
+    }
+
+    .hero-chip {
+        padding: 16px;
+    }
+
+    .countdown-container {
+        gap: 10px;
+    }
+
     .flip-card-inner span {
-        font-size: 2.1rem;
+        font-size: 1.95rem;
+    }
+
+    .flip-card,
+    .flip-card-inner {
+        min-height: 102px;
+    }
+
+    .countdown-item {
+        gap: 8px;
+    }
+
+    .label {
+        font-size: 0.66rem;
+    }
+
+    .model-pill {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 4px;
+        border-radius: 20px;
+    }
+
+    .stat-card {
+        min-height: 120px;
+        padding: 18px;
+    }
+
+    .progress-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 8px;
     }
 }
