@@ -23,7 +23,7 @@
                     <h1>21M Countdown</h1>
                     <p class="hero-text">
                         Bitcoin never mints a literal final whole coin. The protocol keeps halving until the final
-                        1 sat subsidy lands in block <span id="target-block-hero">--</span>, commonly estimated to
+                        1 sat mining reward lands in block <span id="target-block-hero">--</span>, commonly estimated to
                         arrive around 2140.
                     </p>
                 </div>
@@ -34,7 +34,7 @@
                         <strong class="hero-chip-value">~2140</strong>
                     </article>
                     <article class="hero-chip">
-                        <span class="hero-chip-label">Final Subsidy</span>
+                        <span class="hero-chip-label">Final Mining Reward</span>
                         <strong class="hero-chip-value">1 sat</strong>
                     </article>
                     <article class="hero-chip">
@@ -47,7 +47,7 @@
             <section class="countdown-panel">
                 <div class="section-copy">
                     <p class="section-label">Projected time remaining</p>
-                    <h2>Countdown to the last subsidy-bearing block</h2>
+                    <h2>Countdown to the last block with mining rewards</h2>
                     <p class="section-text">
                         The target is fixed at the final reward block and the estimate assumes a constant
                         10-minute block interval.
@@ -125,15 +125,15 @@
                     <strong class="stat-value" id="blocks-left">--</strong>
                 </article>
                 <article class="stat-card">
-                    <span class="stat-label">Current Subsidy</span>
-                    <strong class="stat-value" id="current-subsidy">--</strong>
+                    <span class="stat-label">Current Mining Reward</span>
+                    <strong class="stat-value" id="current-reward">--</strong>
                 </article>
                 <article class="stat-card">
-                    <span class="stat-label">Subsidy Remaining</span>
+                    <span class="stat-label">BTC Left to Mine</span>
                     <strong class="stat-value" id="btc-left">--</strong>
                 </article>
                 <article class="stat-card stat-card-accent">
-                    <span class="stat-label">Estimated Final Subsidy Date</span>
+                    <span class="stat-label">Estimated Final Reward Date</span>
                     <strong class="stat-value" id="estimated-date">--</strong>
                 </article>
             </section>
@@ -147,10 +147,10 @@
                     <div class="progress-fill" id="progress-fill"></div>
                 </div>
                 <p class="progress-text">
-                    <span id="btc-mined">--</span> / <span id="progress-target-supply">--</span> scheduled subsidy issued
+                    <span id="btc-mined">--</span> / <span id="progress-target-supply">--</span> issued through mining rewards
                 </p>
                 <p class="progress-footnote">
-                    Bitcoin’s 21M cap is asymptotic. Subsidy truncation leaves <span id="unissued-amount">--</span> unissued.
+                    Bitcoin’s 21M cap is asymptotic. Protocol rounding leaves <span id="unissued-amount">--</span> unissued.
                 </p>
             </section>
 

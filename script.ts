@@ -14,8 +14,8 @@ const BLOCKS_API_URL = 'https://mempool.space/api/blocks';
 const HEIGHT_API_URL = 'https://mempool.space/api/blocks/tip/height';
 const DAY_MS = 24 * 60 * 60 * 1000;
 
-const FINAL_SUBSIDY_BLOCK = calculateFinalSubsidyBlock();
-const MAX_ISSUABLE_SATS = totalSubsidyAtHeight(FINAL_SUBSIDY_BLOCK);
+const FINAL_REWARD_BLOCK = calculateFinalRewardBlock();
+const MAX_ISSUABLE_SATS = totalIssuedAtHeight(FINAL_REWARD_BLOCK);
 const UNISSUED_SATS = (TOTAL_BTC_SUPPLY * SATS_PER_BTC) - MAX_ISSUABLE_SATS;
 
 // State
@@ -48,7 +48,7 @@ const elements = {
     targetBlockHero: getRequiredElement<HTMLSpanElement>('target-block-hero'),
     blocksLeft: getRequiredElement<HTMLSpanElement>('blocks-left'),
     btcLeft: getRequiredElement<HTMLSpanElement>('btc-left'),
-    currentSubsidy: getRequiredElement<HTMLSpanElement>('current-subsidy'),
+    currentReward: getRequiredElement<HTMLSpanElement>('current-reward'),
     estimatedDate: getRequiredElement<HTMLSpanElement>('estimated-date'),
     btcMined: getRequiredElement<HTMLSpanElement>('btc-mined'),
     finalSupply: getRequiredElement<HTMLSpanElement>('final-supply'),
@@ -59,40 +59,40 @@ const elements = {
     lastUpdate: getRequiredElement<HTMLSpanElement>('last-update')
 };
 
-// Calculate total subsidy mined (in satoshis) at a given block height
-function totalSubsidyAtHeight(height: number | null): number {
+// Calculate total BTC issued through mining rewards (in satoshis) at a given block height
+function totalIssuedAtHeight(height: number | null): number {
     if (height === null || height < 0) return 0;
 
     let remainingBlocks = height + 1;
-    let subsidy = INITIAL_SUBSIDY_SATS;
+    let reward = INITIAL_SUBSIDY_SATS;
     let total = 0;
 
-    while (remainingBlocks > 0 && subsidy > 0) {
+    while (remainingBlocks > 0 && reward > 0) {
         const blocksThisEra = Math.min(remainingBlocks, HALVING_INTERVAL);
-        total += blocksThisEra * subsidy;
+        total += blocksThisEra * reward;
         remainingBlocks -= blocksThisEra;
-        subsidy = Math.floor(subsidy / 2);
+        reward = Math.floor(reward / 2);
     }
 
     return total;
 }
 
-function subsidyAtHeight(height: number | null): number {
+function rewardAtHeight(height: number | null): number {
     if (height === null || height < 0) return 0;
     const era = Math.floor(height / HALVING_INTERVAL);
     return Math.floor(INITIAL_SUBSIDY_SATS / (2 ** era));
 }
 
-function calculateFinalSubsidyBlock(): number {
-    let erasWithSubsidy = 0;
-    let subsidy = INITIAL_SUBSIDY_SATS;
+function calculateFinalRewardBlock(): number {
+    let erasWithReward = 0;
+    let reward = INITIAL_SUBSIDY_SATS;
 
-    while (subsidy > 0) {
-        erasWithSubsidy += 1;
-        subsidy = Math.floor(subsidy / 2);
+    while (reward > 0) {
+        erasWithReward += 1;
+        reward = Math.floor(reward / 2);
     }
 
-    return (erasWithSubsidy * HALVING_INTERVAL) - 1;
+    return (erasWithReward * HALVING_INTERVAL) - 1;
 }
 
 function updateEstimatedTargetTime(blocksLeft: number | null, anchorTimeMs: number | null = lastBlockTimeMs): void {
@@ -121,7 +121,7 @@ async function fetchBlockData(): Promise<boolean> {
         const blockTimeMs = tipBlock.timestamp * 1000;
         if (isNewBlock || estimatedTargetTimeMs === null || lastBlockTimeMs !== blockTimeMs) {
             lastBlockTimeMs = blockTimeMs;
-            updateEstimatedTargetTime(Math.max(0, FINAL_SUBSIDY_BLOCK - currentBlock), blockTimeMs);
+            updateEstimatedTargetTime(Math.max(0, FINAL_REWARD_BLOCK - currentBlock), blockTimeMs);
         }
         updateLastUpdateTime();
         return true;
@@ -145,7 +145,7 @@ async function fetchBlockHeightFallback(): Promise<boolean> {
         currentBlock = height;
         if (isNewBlock || estimatedTargetTimeMs === null) {
             lastBlockTimeMs = Date.now();
-            updateEstimatedTargetTime(Math.max(0, FINAL_SUBSIDY_BLOCK - currentBlock), lastBlockTimeMs);
+            updateEstimatedTargetTime(Math.max(0, FINAL_REWARD_BLOCK - currentBlock), lastBlockTimeMs);
         }
         updateLastUpdateTime();
         return true;
@@ -158,15 +158,15 @@ async function fetchBlockHeightFallback(): Promise<boolean> {
 }
 
 // Calculate remaining blocks, BTC, and total mined
-function calculateRemaining(): { blocksLeft: number; totalMinedSats: number; btcLeftSats: number; currentSubsidySats: number } | null {
+function calculateRemaining(): { blocksLeft: number; totalMinedSats: number; btcLeftSats: number; currentRewardSats: number } | null {
     if (currentBlock === null) return null;
 
-    const blocksLeft = Math.max(0, FINAL_SUBSIDY_BLOCK - currentBlock);
-    const totalMinedSats = totalSubsidyAtHeight(currentBlock);
+    const blocksLeft = Math.max(0, FINAL_REWARD_BLOCK - currentBlock);
+    const totalMinedSats = totalIssuedAtHeight(currentBlock);
     const btcLeftSats = Math.max(0, MAX_ISSUABLE_SATS - totalMinedSats);
-    const currentSubsidySats = subsidyAtHeight(currentBlock);
+    const currentRewardSats = rewardAtHeight(currentBlock);
 
-    return { blocksLeft, totalMinedSats, btcLeftSats, currentSubsidySats };
+    return { blocksLeft, totalMinedSats, btcLeftSats, currentRewardSats };
 }
 
 // Format number with commas
@@ -181,13 +181,13 @@ function formatBtc(amount: number, maximumFractionDigits = 8): string {
     });
 }
 
-function formatSubsidy(subsidySats: number): string {
-    if (subsidySats <= 0) return '0 BTC';
-    if (subsidySats < SATS_PER_BTC) {
-        const satsLabel = subsidySats === 1 ? 'sat' : 'sats';
-        return `${formatBtc(subsidySats / SATS_PER_BTC, 8)} BTC (${formatNumber(subsidySats)} ${satsLabel})`;
+function formatMiningReward(rewardSats: number): string {
+    if (rewardSats <= 0) return '0 BTC';
+    if (rewardSats < SATS_PER_BTC) {
+        const satsLabel = rewardSats === 1 ? 'sat' : 'sats';
+        return `${formatBtc(rewardSats / SATS_PER_BTC, 8)} BTC (${formatNumber(rewardSats)} ${satsLabel})`;
     }
-    return `${formatBtc(subsidySats / SATS_PER_BTC, 8)} BTC`;
+    return `${formatBtc(rewardSats / SATS_PER_BTC, 8)} BTC`;
 }
 
 function padDigits(num: number, digits = 2): string {
@@ -297,19 +297,19 @@ function formatEstimatedDate(targetTimeMs: number): string {
 
 // Update stats display
 function updateStatsDisplay(
-    data: { blocksLeft: number; totalMinedSats: number; btcLeftSats: number; currentSubsidySats: number },
+    data: { blocksLeft: number; totalMinedSats: number; btcLeftSats: number; currentRewardSats: number },
     targetTimeMs: number | null
 ): void {
     elements.currentBlock.classList.remove('error');
     elements.currentBlock.textContent = formatNumber(currentBlock ?? 0);
-    elements.targetBlock.textContent = formatNumber(FINAL_SUBSIDY_BLOCK);
-    elements.targetBlockHero.textContent = formatNumber(FINAL_SUBSIDY_BLOCK);
+    elements.targetBlock.textContent = formatNumber(FINAL_REWARD_BLOCK);
+    elements.targetBlockHero.textContent = formatNumber(FINAL_REWARD_BLOCK);
     elements.blocksLeft.textContent = formatNumber(data.blocksLeft);
     elements.btcLeft.textContent = `${formatBtc(data.btcLeftSats / SATS_PER_BTC)} BTC`;
-    elements.currentSubsidy.textContent = formatSubsidy(data.currentSubsidySats);
+    elements.currentReward.textContent = formatMiningReward(data.currentRewardSats);
 
     if (data.blocksLeft === 0) {
-        elements.estimatedDate.textContent = 'Final subsidy mined';
+        elements.estimatedDate.textContent = 'Final mining reward mined';
     } else if (targetTimeMs !== null) {
         elements.estimatedDate.textContent = formatEstimatedDate(targetTimeMs);
     } else {
@@ -341,8 +341,8 @@ function populateStaticCopy(): void {
     elements.finalSupply.textContent = finalSupplyText;
     elements.progressTargetSupply.textContent = finalSupplyText;
     elements.unissuedAmount.textContent = `${formatBtc(UNISSUED_SATS / SATS_PER_BTC)} BTC`;
-    elements.targetBlock.textContent = formatNumber(FINAL_SUBSIDY_BLOCK);
-    elements.targetBlockHero.textContent = formatNumber(FINAL_SUBSIDY_BLOCK);
+    elements.targetBlock.textContent = formatNumber(FINAL_REWARD_BLOCK);
+    elements.targetBlockHero.textContent = formatNumber(FINAL_REWARD_BLOCK);
 }
 
 // Main update function
