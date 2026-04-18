@@ -25,5 +25,10 @@ If you open `index.html` directly, run the build first so `script.js` exists.
 ## Disclaimer
 This is still a projection. Block intervals are probabilistic, difficulty adjusts over time, and any date shown is an estimate rather than a protocol guarantee.
 
+## Community Health
+- See `CONTRIBUTING.md` for the preferred contribution flow
+- See `SUPPORT.md` for help, FAQ, and where to ask questions
+- See `SECURITY.md` for responsible vulnerability reporting
+
 ## License
 MIT License. See `LICENSE`.

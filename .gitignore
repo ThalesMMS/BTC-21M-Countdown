@@ -2,3 +2,4 @@ node_modules
 npm-debug.log*
 .DS_Store
 script.js
+AGENTS.md
